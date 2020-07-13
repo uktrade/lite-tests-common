@@ -2,14 +2,14 @@ import logging
 import os
 from selenium import webdriver
 
+from ..tools import utils
+
 ENVIRONMENT = os.environ.get("ENVIRONMENT")
 BROWSER_HOSTS = os.environ.get("BROWSER_HOSTS")
 TEST_HOSTS = os.environ.get("BROWSER_HOSTS")
 AUTH_USER_NAME = os.environ.get("AUTH_USER_NAME")
 AUTH_USER_PASSWORD = os.environ.get("AUTH_USER_PASSWORD")
 ENDPOINT = os.environ.get("ENDPOINT")
-BROWSER_STACK_USERNAME = os.environ.get("BROWSERSTACK_USERNAME")
-BROWSER_STACK_ACCESS_KEY = os.environ.get("BROWSERSTACK_ACCESS_KEY")
 
 
 class wait_for_page_load_after_action(object):
@@ -64,15 +64,36 @@ def create_browserstack_driver(bs_username, bs_access_key):
     )
 
 
-def enable_browser_stack(request):
-    driver = create_browserstack_driver(BROWSER_STACK_USERNAME, BROWSER_STACK_ACCESS_KEY)
+def grant_driver_remote_access(driver):
+    hosts = list(BROWSER_HOSTS.replace("${ENVIRONMENT}", ENVIRONMENT).split(","))
 
-    browser_hosts = list(BROWSER_HOSTS.replace("${ENVIRONMENT}", ENVIRONMENT).split(","))
-    for host in browser_hosts:
+    for host in hosts:
         logging.debug("Allowing browser access to %s", host)
         url = f"https://{AUTH_USER_NAME}:{AUTH_USER_PASSWORD}@{host}{ENDPOINT}"
         with wait_for_page_load_after_action(driver):
             driver.get(url)
-            driver.maximize_window()
             assert "Access Denied" not in driver.page_source
+
+def build_options():
+    options = webdriver.ChromeOptions()
+    # TODO: check if headless
+    options.add_argument("--headless")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    # TODO: add --proxy-server option
+    return options
+
+
+class Chrome(webdriver.Chrome):
+    set_timeout_to = utils.set_timeout_to
+    set_timeout_to_10_seconds = utils.set_timeout_to_10_seconds
+
+
+def build_driver():
+    options = build_options()
+    driver = Chrome(options=options)
+    driver.get("about:blank")
+    driver.set_timeout_to(10)
+    driver.maximize_window()
     return driver
